@@ -6,6 +6,7 @@
 <title>Tracking Klaim Dealer — Main Dealer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.min.js"></script>
 <style>
   :root{
     --bg:#16233A;
@@ -360,10 +361,10 @@
           <h4>Pembayaran</h4>
           <p>Laporan detail nominal dan status pembayaran</p>
         </div>
-        <div class="report-card" id="report-csv">
+        <div class="report-card" id="report-excel">
           <div class="icon">📥</div>
-          <h4>Export CSV</h4>
-          <p>Unduh semua data dalam format spreadsheet</p>
+          <h4>Export Excel</h4>
+          <p>Unduh semua data dalam format Excel profesional</p>
         </div>
         <div class="report-card" id="report-detail">
           <div class="icon">📄</div>
@@ -452,11 +453,20 @@ document.getElementById('password-cancel').addEventListener('click', ()=>{
 function fmtRupiah(n){
   return 'Rp ' + Number(n||0).toLocaleString('id-ID');
 }
+function fmtRupiahNum(n){
+  return Number(n||0).toLocaleString('id-ID');
+}
 function fmtDate(d){
   if(!d) return '-';
   const dt = new Date(d);
   if(isNaN(dt)) return d;
   return dt.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'});
+}
+function fmtDateISO(d){
+  if(!d) return '-';
+  const dt = new Date(d);
+  if(isNaN(dt)) return d;
+  return dt.toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric'});
 }
 function showToast(msg){
   const t = document.getElementById('toast');
@@ -841,7 +851,7 @@ document.getElementById('report-summary').addEventListener('click', generateSumm
 document.getElementById('report-by-program').addEventListener('click', generateProgramReport);
 document.getElementById('report-by-dealer').addEventListener('click', generateDealerReport);
 document.getElementById('report-payment').addEventListener('click', generatePaymentReport);
-document.getElementById('report-csv').addEventListener('click', exportToCSV);
+document.getElementById('report-excel').addEventListener('click', exportToExcel);
 document.getElementById('report-detail').addEventListener('click', printDetailReport);
 
 function generateSummaryReport(){
@@ -952,24 +962,134 @@ function generatePaymentReport(){
   showReportModal('Laporan Pembayaran', html);
 }
 
-function exportToCSV(){
+function exportToExcel(){
   if(claims.length === 0){
     showToast('Tidak ada data untuk diexport.');
     return;
   }
-  
-  let csv = 'ID,Dealer,Program,Invoice,Nominal,Tanggal Kirim,PIC,Status\n';
-  claims.forEach(c => {
-    const st = STATUS[c.status].label;
-    csv += `${c.id},"${c.dealer}","${c.program}","${c.invoice}",${c.amount},"${c.submittedDate}","${c.pic}","${st}"\n`;
-  });
-  
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = 'klaim-dealer-' + new Date().toISOString().slice(0,10) + '.csv';
-  link.click();
-  showToast('File CSV berhasil diunduh.');
+
+  try {
+    // Persiapan data untuk sheet 1: Detail Klaim
+    const detailData = [];
+    detailData.push(['LAPORAN TRACKING KLAIM DEALER', '', '', '', '', '', '']);
+    detailData.push(['Tanggal Laporan: ' + new Date().toLocaleDateString('id-ID'), '', '', '', '', '', '']);
+    detailData.push(['', '', '', '', '', '', '']);
+    
+    detailData.push(['ID KLAIM', 'NAMA DEALER', 'PROGRAM', 'NO. INVOICE', 'NOMINAL (Rp)', 'TGL KIRIM', 'STATUS']);
+    
+    claims.forEach(c => {
+      const st = STATUS[c.status].label;
+      detailData.push([
+        c.id,
+        c.dealer,
+        c.program,
+        c.invoice,
+        c.amount,
+        fmtDateISO(c.submittedDate),
+        st
+      ]);
+    });
+
+    // Persiapan data untuk sheet 2: Ringkasan
+    const stats = computeStats();
+    const summaryData = [];
+    summaryData.push(['RINGKASAN STATUS KLAIM', '']);
+    summaryData.push(['', '']);
+    summaryData.push(['KETERANGAN', 'JUMLAH']);
+    summaryData.push(['Total Klaim', stats.total]);
+    summaryData.push(['Diajukan', stats.submitted]);
+    summaryData.push(['Diterima MD', stats.received]);
+    summaryData.push(['Verifikasi', stats.verification]);
+    summaryData.push(['Revisi', stats.revise]);
+    summaryData.push(['Disetujui', stats.approved]);
+    summaryData.push(['Proses Bayar', stats.processing]);
+    summaryData.push(['Dibayar', stats.paid]);
+    summaryData.push(['', '']);
+    
+    const totalAmount = claims.reduce((sum, c) => sum + c.amount, 0);
+    const paidAmount = claims.filter(c => c.status === 'paid').reduce((sum, c) => sum + c.amount, 0);
+    summaryData.push(['Total Nominal', totalAmount]);
+    summaryData.push(['Nominal Dibayar', paidAmount]);
+    summaryData.push(['Nominal Belum Bayar', totalAmount - paidAmount]);
+
+    // Persiapan data untuk sheet 3: Per Program
+    const programData = [];
+    programData.push(['LAPORAN PER PROGRAM', '', '', '']);
+    programData.push(['', '', '', '']);
+    programData.push(['PROGRAM', 'JUMLAH KLAIM', 'TOTAL NOMINAL (Rp)', 'KLAIM DIBAYAR']);
+    
+    const byProgram = {};
+    PROGRAMS.forEach(p => byProgram[p] = { count: 0, amount: 0, paid: 0 });
+    claims.forEach(c => {
+      if(byProgram[c.program]){
+        byProgram[c.program].count++;
+        byProgram[c.program].amount += c.amount;
+        if(c.status === 'paid') byProgram[c.program].paid++;
+      }
+    });
+    
+    PROGRAMS.forEach(p => {
+      const d = byProgram[p];
+      if(d.count > 0){
+        programData.push([p, d.count, d.amount, d.paid]);
+      }
+    });
+
+    // Persiapan data untuk sheet 4: Per Dealer
+    const dealerData = [];
+    dealerData.push(['LAPORAN PER DEALER', '', '', '']);
+    dealerData.push(['', '', '', '']);
+    dealerData.push(['DEALER', 'JUMLAH KLAIM', 'TOTAL NOMINAL (Rp)', 'KLAIM DIBAYAR']);
+    
+    const byDealer = {};
+    claims.forEach(c => {
+      if(!byDealer[c.dealer]) byDealer[c.dealer] = { count: 0, amount: 0, paid: 0 };
+      byDealer[c.dealer].count++;
+      byDealer[c.dealer].amount += c.amount;
+      if(c.status === 'paid') byDealer[c.dealer].paid++;
+    });
+    
+    Object.entries(byDealer).sort((a,b) => b[1].amount - a[1].amount).forEach(([dealer, data]) => {
+      dealerData.push([dealer, data.count, data.amount, data.paid]);
+    });
+
+    // Buat workbook
+    const wb = XLSX.utils.book_new();
+    
+    // Tambah sheet
+    const ws1 = XLSX.utils.aoa_to_sheet(detailData);
+    ws1['!cols'] = [
+      {wch: 15}, // ID KLAIM
+      {wch: 25}, // NAMA DEALER
+      {wch: 12}, // PROGRAM
+      {wch: 18}, // NO. INVOICE
+      {wch: 18}, // NOMINAL
+      {wch: 15}, // TGL KIRIM
+      {wch: 18}  // STATUS
+    ];
+    
+    const ws2 = XLSX.utils.aoa_to_sheet(summaryData);
+    ws2['!cols'] = [{wch: 25}, {wch: 15}];
+    
+    const ws3 = XLSX.utils.aoa_to_sheet(programData);
+    ws3['!cols'] = [{wch: 15}, {wch: 15}, {wch: 18}, {wch: 15}];
+    
+    const ws4 = XLSX.utils.aoa_to_sheet(dealerData);
+    ws4['!cols'] = [{wch: 25}, {wch: 15}, {wch: 18}, {wch: 15}];
+
+    XLSX.utils.book_append_sheet(wb, ws1, 'Detail Klaim');
+    XLSX.utils.book_append_sheet(wb, ws2, 'Ringkasan');
+    XLSX.utils.book_append_sheet(wb, ws3, 'Per Program');
+    XLSX.utils.book_append_sheet(wb, ws4, 'Per Dealer');
+
+    // Download
+    const filename = 'Laporan-Klaim-Dealer-' + new Date().toISOString().slice(0,10) + '.xlsx';
+    XLSX.writeFile(wb, filename);
+    showToast('File Excel berhasil diunduh.');
+  } catch (err) {
+    console.error('Export error:', err);
+    showToast('Gagal membuat file Excel.');
+  }
 }
 
 function printDetailReport(){
