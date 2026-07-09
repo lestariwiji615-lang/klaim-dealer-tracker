@@ -24,33 +24,36 @@
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;min-height:100vh;}
   
-  /* LOGIN SCREEN */
-  .login-screen{
-    position:fixed;inset:0;background:linear-gradient(180deg,var(--bg-alt),var(--bg));
-    display:flex;align-items:center;justify-content:center;z-index:200;padding:20px;
+  /* PASSWORD MODAL */
+  .password-modal{
+    position:fixed;inset:0;background:rgba(14,24,38,.65);display:none;align-items:center;justify-content:center;
+    padding:20px;z-index:150;
   }
-  .login-screen.hidden{display:none;}
-  .login-box{
+  .password-modal.active{display:flex;}
+  .password-box{
     background:var(--paper);border-radius:14px;padding:40px;max-width:380px;width:100%;
     box-shadow:0 20px 60px rgba(0,0,0,.4);
   }
-  .login-box h2{font-family:'Roboto Slab',serif;font-size:24px;margin:0 0 6px;color:var(--ink);}
-  .login-box p{color:var(--ink-soft);font-size:13px;margin:0 0 28px;line-height:1.5;}
-  .login-field{margin-bottom:16px;display:flex;flex-direction:column;gap:6px;}
-  .login-field label{font-size:12.5px;font-weight:600;color:var(--ink);}
-  .login-field input{
+  .password-box h2{font-family:'Roboto Slab',serif;font-size:24px;margin:0 0 6px;color:var(--ink);}
+  .password-box p{color:var(--ink-soft);font-size:13px;margin:0 0 28px;line-height:1.5;}
+  .password-field{margin-bottom:16px;display:flex;flex-direction:column;gap:6px;}
+  .password-field label{font-size:12.5px;font-weight:600;color:var(--ink);}
+  .password-field input{
     font-family:'Inter',sans-serif;font-size:14px;padding:11px 14px;border-radius:8px;
     border:1.5px solid var(--paper-line);background:#fff;color:var(--ink);outline:none;
   }
-  .login-field input:focus{border-color:var(--stamp-blue);}
-  .login-field .error{font-size:11.5px;color:var(--stamp-red);margin-top:2px;}
-  .login-btn{
-    width:100%;font-family:'Roboto Mono',monospace;font-size:13px;letter-spacing:.05em;
-    text-transform:uppercase;border:none;border-radius:8px;padding:12px;cursor:pointer;
-    font-weight:600;background:var(--stamp-blue);color:#fff;transition:transform .1s;margin-top:8px;
+  .password-field input:focus{border-color:var(--stamp-blue);}
+  .password-field .error{font-size:11.5px;color:var(--stamp-red);margin-top:2px;}
+  .password-btn-row{display:flex;gap:10px;margin-top:20px;}
+  .password-btn{
+    flex:1;font-family:'Roboto Mono',monospace;font-size:12px;letter-spacing:.05em;
+    text-transform:uppercase;border:none;border-radius:8px;padding:11px;cursor:pointer;
+    font-weight:600;transition:transform .1s;
   }
-  .login-btn:hover{background:var(--stamp-blue);}
-  .login-btn:active{transform:scale(.98);}
+  .password-btn-submit{background:var(--stamp-blue);color:#fff;}
+  .password-btn-submit:active{transform:scale(.98);}
+  .password-btn-cancel{background:transparent;border:1.5px solid var(--ink);color:var(--ink);}
+  .password-btn-cancel:active{transform:scale(.98);}
   
   .cover{
     background:linear-gradient(180deg,var(--bg-alt),var(--bg));
@@ -58,9 +61,6 @@
     color:#EFE7D2;
     border-bottom:6px solid #0E1826;
     position:relative;
-    display:flex;
-    justify-content:space-between;
-    align-items:flex-end;
   }
   .cover::after{
     content:"";
@@ -68,18 +68,10 @@
     background:repeating-linear-gradient(90deg,#0E1826 0 10px, transparent 10px 20px);
     opacity:.35;
   }
-  .cover-inner{max-width:1080px;margin:0 auto;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px;width:100%;}
+  .cover-inner{max-width:1080px;margin:0 auto;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px;}
   .brand-eyebrow{font-family:'Roboto Mono',monospace;letter-spacing:.18em;font-size:11px;text-transform:uppercase;color:#9FB2CE;margin:0 0 6px;}
   .brand-title{font-family:'Roboto Slab',serif;font-weight:700;font-size:30px;margin:0;letter-spacing:.01em;}
   .brand-sub{font-size:13px;color:#B9C6DA;margin-top:6px;max-width:520px;line-height:1.5;}
-  
-  .header-actions{display:flex;gap:12px;align-items:center;}
-  .logout-btn{
-    font-family:'Roboto Mono',monospace;font-size:11px;letter-spacing:.05em;text-transform:uppercase;
-    background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.3);color:#fff;
-    padding:8px 14px;border-radius:6px;cursor:pointer;transition:background .15s;
-  }
-  .logout-btn:hover{background:rgba(255,255,255,.2);}
   
   .tabs{display:flex;gap:8px;background:rgba(0,0,0,.2);padding:6px;border-radius:10px;}
   .tab-btn{
@@ -224,18 +216,21 @@
 </head>
 <body>
 
-<!-- LOGIN SCREEN -->
-<div class="login-screen" id="login-screen">
-  <div class="login-box">
-    <h2>Admin Login</h2>
-    <p>Masukkan password untuk mengakses bagian monitoring dan laporan.</p>
-    <form id="login-form">
-      <div class="login-field">
-        <label>Password Admin</label>
-        <input type="password" id="login-password" placeholder="Masukkan password" required>
-        <span class="error" id="login-error" style="display:none;"></span>
+<!-- PASSWORD MODAL -->
+<div class="password-modal" id="password-modal">
+  <div class="password-box">
+    <h2>Password Required</h2>
+    <p>Masukkan password untuk mengakses bagian Monitoring.</p>
+    <form id="password-form">
+      <div class="password-field">
+        <label>Password</label>
+        <input type="password" id="password-input" placeholder="Masukkan password" required>
+        <span class="error" id="password-error" style="display:none;"></span>
       </div>
-      <button type="submit" class="login-btn">Login</button>
+      <div class="password-btn-row">
+        <button type="button" class="password-btn password-btn-cancel" id="password-cancel">Batal</button>
+        <button type="submit" class="password-btn password-btn-submit" id="password-submit">Masuk</button>
+      </div>
     </form>
   </div>
 </div>
@@ -246,13 +241,10 @@
     <h1 class="brand-title">Tracking Klaim Dealer</h1>
     <p class="brand-sub">Pantau berkas klaim SCP, DG, Voucher, GC, RT, LCR, KPB, Pameran & Roadshow dari dealer hingga dibayar.</p>
   </div>
-  <div class="header-actions">
-    <div class="tabs" id="tabs-container">
-      <button class="tab-btn active" data-view="submit">Kirim Klaim</button>
-      <button class="tab-btn" data-view="monitor">Monitoring</button>
-      <button class="tab-btn" data-view="report">Laporan</button>
-    </div>
-    <button class="logout-btn" id="logout-btn" style="display:none;">Logout</button>
+  <div class="tabs">
+    <button class="tab-btn active" data-view="submit">Kirim Klaim</button>
+    <button class="tab-btn" data-view="monitor">Monitoring</button>
+    <button class="tab-btn" data-view="report">Laporan</button>
   </div>
 </div>
 
@@ -395,8 +387,8 @@
 
 <script>
 const STORAGE_KEY = 'claims-data';
-const AUTH_KEY = 'admin-auth';
-const DEFAULT_PASSWORD = 'admin123'; // Default password - CHANGE THIS!
+const PASSWORD_KEY = 'monitoring-access';
+const DEFAULT_PASSWORD = 'admin123'; // Ganti dengan password yang diinginkan
 const PROGRAMS = ['SCP','DG','Voucher','GC','RT','LCR','KPB','Pameran','Roadshow'];
 
 const STATUS = {
@@ -411,60 +403,49 @@ const STATUS = {
 
 let claims = [];
 let activeStatusFilter = null;
-let isLoggedIn = false;
+let hasMonitoringAccess = false;
+let lastAttemptedView = null;
 
-// ========== AUTH ==========
-function checkAuth(){
-  const auth = localStorage.getItem(AUTH_KEY);
-  isLoggedIn = auth === 'true';
-  updateAuthUI();
+// ========== PASSWORD ==========
+function checkMonitoringAccess(){
+  const access = localStorage.getItem(PASSWORD_KEY);
+  hasMonitoringAccess = access === 'true';
 }
 
-function updateAuthUI(){
-  const loginScreen = document.getElementById('login-screen');
-  const logoutBtn = document.getElementById('logout-btn');
-  const monitorTab = document.querySelector('[data-view="monitor"]');
-  const reportTab = document.querySelector('[data-view="report"]');
-
-  if(isLoggedIn){
-    loginScreen.classList.add('hidden');
-    logoutBtn.style.display = 'inline-block';
-    monitorTab.style.display = 'inline-block';
-    reportTab.style.display = 'inline-block';
-  } else {
-    loginScreen.classList.remove('hidden');
-    logoutBtn.style.display = 'none';
-    monitorTab.style.display = 'none';
-    reportTab.style.display = 'none';
-    if(document.getElementById('view-monitor').classList.contains('active')){
-      document.querySelector('[data-view="submit"]').click();
-    }
-  }
+function showPasswordModal(){
+  document.getElementById('password-modal').classList.add('active');
+  document.getElementById('password-input').focus();
 }
 
-document.getElementById('login-form').addEventListener('submit', (e)=>{
+function hidePasswordModal(){
+  document.getElementById('password-modal').classList.remove('active');
+  document.getElementById('password-input').value = '';
+  document.getElementById('password-error').style.display = 'none';
+}
+
+document.getElementById('password-form').addEventListener('submit', (e)=>{
   e.preventDefault();
-  const pwd = document.getElementById('login-password').value;
-  const err = document.getElementById('login-error');
+  const pwd = document.getElementById('password-input').value;
+  const err = document.getElementById('password-error');
   
   if(pwd === DEFAULT_PASSWORD){
-    localStorage.setItem(AUTH_KEY, 'true');
-    isLoggedIn = true;
-    updateAuthUI();
-    document.getElementById('login-password').value = '';
-    showToast('Login berhasil!');
+    localStorage.setItem(PASSWORD_KEY, 'true');
+    hasMonitoringAccess = true;
+    hidePasswordModal();
+    showToast('Password benar! Selamat datang.');
+    if(lastAttemptedView){
+      switchToView(lastAttemptedView);
+    }
   } else {
     err.textContent = 'Password salah, coba lagi.';
     err.style.display = 'block';
-    setTimeout(()=>err.style.display = 'none', 3000);
   }
 });
 
-document.getElementById('logout-btn').addEventListener('click', ()=>{
-  localStorage.removeItem(AUTH_KEY);
-  isLoggedIn = false;
-  updateAuthUI();
-  showToast('Anda telah logout.');
+document.getElementById('password-cancel').addEventListener('click', ()=>{
+  hidePasswordModal();
+  document.querySelector('[data-view="submit"]').click();
+  lastAttemptedView = null;
 });
 
 // ========== UTILS ==========
@@ -512,17 +493,25 @@ async function saveClaims(){
 }
 
 // ========== TABS ==========
+function switchToView(viewName){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelector(`[data-view="${viewName}"]`).classList.add('active');
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+viewName).classList.add('active');
+  if(viewName === 'monitor') render();
+}
+
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
-    if(!isLoggedIn && (btn.dataset.view === 'monitor' || btn.dataset.view === 'report')){
-      showToast('Silakan login terlebih dahulu.');
+    const view = btn.dataset.view;
+    
+    if((view === 'monitor' || view === 'report') && !hasMonitoringAccess){
+      lastAttemptedView = view;
+      showPasswordModal();
       return;
     }
-    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
-    document.getElementById('view-'+btn.dataset.view).classList.add('active');
-    if(btn.dataset.view === 'monitor') render();
+    
+    switchToView(view);
   });
 });
 
@@ -1050,7 +1039,7 @@ function showReportModal(title, content){
 }
 
 // ========== INIT ==========
-checkAuth();
+checkMonitoringAccess();
 loadClaims();
 </script>
 
