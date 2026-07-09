@@ -389,7 +389,7 @@
 <script>
 const STORAGE_KEY = 'claims-data';
 const PASSWORD_KEY = 'monitoring-access';
-const DEFAULT_PASSWORD = 'admin123'; // Ganti dengan password yang diinginkan
+const DEFAULT_PASSWORD = 'admin123';
 const PROGRAMS = ['SCP','DG','Voucher','GC','RT','LCR','KPB','Pameran','Roadshow'];
 
 const STATUS = {
@@ -399,7 +399,8 @@ const STATUS = {
   revise:      { label:'Revisi',          color:'red',   order:4 },
   approved:    { label:'Disetujui',       color:'green', order:4 },
   processing:  { label:'Dalam Proses',    color:'amber', order:5 },
-  paid:        { label:'Dibayar',         color:'green', order:6 },
+  received_tax:{ label:'Diterima Tax',    color:'blue',  order:6 },
+  received_finance:{ label:'Diterima Finance', color:'green', order:7 },
 };
 
 let claims = [];
@@ -587,6 +588,12 @@ document.getElementById('claim-form').addEventListener('submit', async (e)=>{
     notes: document.getElementById('f-notes').value.trim(),
     evidence: pendingEvidence,
     status: 'submitted',
+    dates: {
+      submitted: document.getElementById('f-date').value,
+      received_md: null,
+      received_tax: null,
+      received_finance: null
+    },
     history: [
       { stage:'submitted', label:'Diajukan oleh dealer', date: document.getElementById('f-date').value, note: document.getElementById('f-notes').value.trim() }
     ]
@@ -623,7 +630,8 @@ function renderStats(){
     { key:'revise', label:'Revisi', num:s.revise, color:'var(--stamp-red)' },
     { key:'approved', label:'Disetujui', num:s.approved, color:'var(--stamp-green)' },
     { key:'processing', label:'Dalam Proses', num:s.processing, color:'var(--stamp-amber)' },
-    { key:'paid', label:'Dibayar', num:s.paid, color:'var(--stamp-green)' },
+    { key:'received_tax', label:'Diterima Tax', num:s.received_tax, color:'var(--stamp-blue)' },
+    { key:'received_finance', label:'Diterima Finance', num:s.received_finance, color:'var(--stamp-green)' },
   ];
   const row = document.getElementById('stats-row');
   row.innerHTML = cards.map(c => `
@@ -780,18 +788,19 @@ function renderActionArea(c){
   } else if(c.status === 'approved'){
     html = `
       <div class="action-box">
-        <h4>Proses Pembayaran</h4>
-        <div class="btn-row"><button class="btn btn-amber" id="act-go">Mulai Proses Bayar</button></div>
+        <h4>Tandai Diterima Tim Tax</h4>
+        <div class="field"><label>Tanggal Diterima</label><input type="date" id="act-date" value="${today}"></div>
+        <div class="btn-row"><button class="btn btn-blue" id="act-go">Tandai Diterima Tax</button></div>
       </div>`;
-  } else if(c.status === 'processing'){
+  } else if(c.status === 'received_tax'){
     html = `
       <div class="action-box">
-        <h4>Tandai Dibayar</h4>
-        <div class="field"><label>Tanggal Bayar</label><input type="date" id="act-date" value="${today}"></div>
-        <div class="btn-row"><button class="btn btn-green" id="act-go">Tandai Dibayar</button></div>
+        <h4>Tandai Diterima Finance</h4>
+        <div class="field"><label>Tanggal Diterima</label><input type="date" id="act-date" value="${today}"></div>
+        <div class="btn-row"><button class="btn btn-green" id="act-go">Tandai Diterima Finance</button></div>
       </div>`;
-  } else if(c.status === 'paid'){
-    html = `<div class="action-box"><h4>Selesai</h4><p style="font-size:13px;margin:0;">Klaim ini telah dibayar dan proses selesai.</p></div>`;
+  } else if(c.status === 'received_finance'){
+    html = `<div class="action-box"><h4>Selesai</h4><p style="font-size:13px;margin:0;">Klaim ini telah diterima Finance dan proses selesai.</p></div>`;
   }
 
   area.innerHTML = html;
@@ -812,14 +821,20 @@ async function handleAdvance(c){
     submitted:  { next:'received', label:'Diterima Main Dealer' },
     received:   { next:'verification', label:'Verifikasi dimulai' },
     revise:     { next:'received', label:'Berkas revisi diterima kembali' },
-    approved:   { next:'processing', label:'Proses pembayaran dimulai' },
-    processing: { next:'paid', label:'Klaim dibayar' },
+    approved:   { next:'received_tax', label:'Diterima Tim Tax' },
+    received_tax: { next:'received_finance', label:'Diterima Finance' },
   };
   const t = transitions[c.status];
   if(!t) return;
 
   c.status = t.next;
   c.history.push({ stage:t.next, label:t.label, date });
+  
+  if(!c.dates) c.dates = {};
+  if(t.next === 'received') c.dates.received_md = date;
+  if(t.next === 'received_tax') c.dates.received_tax = date;
+  if(t.next === 'received_finance') c.dates.received_finance = date;
+  
   await saveClaims();
   render();
   openDetail(c.id);
@@ -865,18 +880,18 @@ function generateSummaryReport(){
       <div><div class="k">Verifikasi</div><div class="v">${stats.verification}</div></div>
       <div><div class="k">Revisi</div><div class="v">${stats.revise}</div></div>
       <div><div class="k">Disetujui</div><div class="v">${stats.approved}</div></div>
-      <div><div class="k">Proses Bayar</div><div class="v">${stats.processing}</div></div>
-      <div><div class="k">Dibayar</div><div class="v">${stats.paid}</div></div>
+      <div><div class="k">Diterima Tax</div><div class="v">${stats.received_tax}</div></div>
+      <div><div class="k">Diterima Finance</div><div class="v">${stats.received_finance}</div></div>
     </div>
   `;
   
   const totalAmount = claims.reduce((sum, c) => sum + c.amount, 0);
-  const paidAmount = claims.filter(c => c.status === 'paid').reduce((sum, c) => sum + c.amount, 0);
+  const financeAmount = claims.filter(c => c.status === 'received_finance').reduce((sum, c) => sum + c.amount, 0);
   
   html += `
     <div class="detail-grid" style="margin-top:20px;border-top:2px solid var(--paper-line);padding-top:20px;">
       <div><div class="k">Total Nominal</div><div class="v">${fmtRupiah(totalAmount)}</div></div>
-      <div><div class="k">Nominal Dibayar</div><div class="v">${fmtRupiah(paidAmount)}</div></div>
+      <div><div class="k">Nominal Diterima Finance</div><div class="v">${fmtRupiah(financeAmount)}</div></div>
     </div>
   `;
   
@@ -885,18 +900,18 @@ function generateSummaryReport(){
 
 function generateProgramReport(){
   const byProgram = {};
-  PROGRAMS.forEach(p => byProgram[p] = { count: 0, amount: 0, paid: 0 });
+  PROGRAMS.forEach(p => byProgram[p] = { count: 0, amount: 0, finance: 0 });
   
   claims.forEach(c => {
     if(byProgram[c.program]){
       byProgram[c.program].count++;
       byProgram[c.program].amount += c.amount;
-      if(c.status === 'paid') byProgram[c.program].paid++;
+      if(c.status === 'received_finance') byProgram[c.program].finance++;
     }
   });
   
   let html = '<h3>Laporan Per Program</h3><table style="width:100%;border-collapse:collapse;margin-top:16px;">';
-  html += '<thead><tr><th style="text-align:left;border-bottom:2px solid var(--ink);padding:8px;">Program</th><th style="text-align:right;border-bottom:2px solid var(--ink);padding:8px;">Klaim</th><th style="text-align:right;border-bottom:2px solid var(--ink);padding:8px;">Total</th><th style="text-align:right;border-bottom:2px solid var(--ink);padding:8px;">Dibayar</th></tr></thead>';
+  html += '<thead><tr><th style="text-align:left;border-bottom:2px solid var(--ink);padding:8px;">Program</th><th style="text-align:right;border-bottom:2px solid var(--ink);padding:8px;">Klaim</th><th style="text-align:right;border-bottom:2px solid var(--ink);padding:8px;">Nominal</th><th style="text-align:right;border-bottom:2px solid var(--ink);padding:8px;">Finance</th></tr></thead>';
   
   PROGRAMS.forEach(p => {
     const d = byProgram[p];
@@ -905,7 +920,7 @@ function generateProgramReport(){
         <td style="border-bottom:1px solid var(--paper-line);padding:8px;">${p}</td>
         <td style="text-align:right;border-bottom:1px solid var(--paper-line);padding:8px;">${d.count}</td>
         <td style="text-align:right;border-bottom:1px solid var(--paper-line);padding:8px;">${fmtRupiah(d.amount)}</td>
-        <td style="text-align:right;border-bottom:1px solid var(--paper-line);padding:8px;">${d.paid}</td>
+        <td style="text-align:right;border-bottom:1px solid var(--paper-line);padding:8px;">${d.finance}</td>
       </tr>`;
     }
   });
@@ -918,21 +933,21 @@ function generateDealerReport(){
   const byDealer = {};
   
   claims.forEach(c => {
-    if(!byDealer[c.dealer]) byDealer[c.dealer] = { count: 0, amount: 0, paid: 0 };
+    if(!byDealer[c.dealer]) byDealer[c.dealer] = { count: 0, amount: 0, finance: 0 };
     byDealer[c.dealer].count++;
     byDealer[c.dealer].amount += c.amount;
-    if(c.status === 'paid') byDealer[c.dealer].paid++;
+    if(c.status === 'received_finance') byDealer[c.dealer].finance++;
   });
   
   let html = '<h3>Laporan Per Dealer</h3><table style="width:100%;border-collapse:collapse;margin-top:16px;">';
-  html += '<thead><tr><th style="text-align:left;border-bottom:2px solid var(--ink);padding:8px;">Dealer</th><th style="text-align:right;border-bottom:2px solid var(--ink);padding:8px;">Klaim</th><th style="text-align:right;border-bottom:2px solid var(--ink);padding:8px;">Total</th><th style="text-align:right;border-bottom:2px solid var(--ink);padding:8px;">Dibayar</th></tr></thead>';
+  html += '<thead><tr><th style="text-align:left;border-bottom:2px solid var(--ink);padding:8px;">Dealer</th><th style="text-align:right;border-bottom:2px solid var(--ink);padding:8px;">Klaim</th><th style="text-align:right;border-bottom:2px solid var(--ink);padding:8px;">Nominal</th><th style="text-align:right;border-bottom:2px solid var(--ink);padding:8px;">Finance</th></tr></thead>';
   
   Object.entries(byDealer).sort((a,b) => b[1].amount - a[1].amount).forEach(([dealer, data]) => {
     html += `<tr>
       <td style="border-bottom:1px solid var(--paper-line);padding:8px;">${escapeHtml(dealer)}</td>
       <td style="text-align:right;border-bottom:1px solid var(--paper-line);padding:8px;">${data.count}</td>
       <td style="text-align:right;border-bottom:1px solid var(--paper-line);padding:8px;">${fmtRupiah(data.amount)}</td>
-      <td style="text-align:right;border-bottom:1px solid var(--paper-line);padding:8px;">${data.paid}</td>
+      <td style="text-align:right;border-bottom:1px solid var(--paper-line);padding:8px;">${data.finance}</td>
     </tr>`;
   });
   
@@ -941,21 +956,21 @@ function generateDealerReport(){
 }
 
 function generatePaymentReport(){
-  const paidClaims = claims.filter(c => c.status === 'paid');
-  const totalPaid = paidClaims.reduce((sum, c) => sum + c.amount, 0);
+  const financeClaims = claims.filter(c => c.status === 'received_finance');
+  const totalFinance = financeClaims.reduce((sum, c) => sum + c.amount, 0);
   const totalAll = claims.reduce((sum, c) => sum + c.amount, 0);
   
   let html = `
     <h3>Laporan Pembayaran</h3>
     <div class="detail-grid">
       <div><div class="k">Total Klaim</div><div class="v">${claims.length}</div></div>
-      <div><div class="k">Klaim Dibayar</div><div class="v">${paidClaims.length}</div></div>
+      <div><div class="k">Klaim Diterima Finance</div><div class="v">${financeClaims.length}</div></div>
       <div><div class="k">Total Nominal</div><div class="v">${fmtRupiah(totalAll)}</div></div>
-      <div><div class="k">Total Pembayaran</div><div class="v">${fmtRupiah(totalPaid)}</div></div>
+      <div><div class="k">Total Finance</div><div class="v">${fmtRupiah(totalFinance)}</div></div>
     </div>
     <div class="detail-grid" style="margin-top:20px;border-top:2px solid var(--paper-line);padding-top:20px;">
-      <div><div class="k">Belum Dibayar</div><div class="v">${claims.length - paidClaims.length}</div></div>
-      <div><div class="k">Nominal Belum Bayar</div><div class="v">${fmtRupiah(totalAll - totalPaid)}</div></div>
+      <div><div class="k">Belum Finance</div><div class="v">${claims.length - financeClaims.length}</div></div>
+      <div><div class="k">Nominal Belum Finance</div><div class="v">${fmtRupiah(totalAll - totalFinance)}</div></div>
     </div>
   `;
   
@@ -969,23 +984,25 @@ function exportToExcel(){
   }
 
   try {
-    // Persiapan data untuk sheet 1: Detail Klaim
+    // Persiapan data untuk sheet: Detail tracking dengan all dates
     const detailData = [];
-    detailData.push(['LAPORAN TRACKING KLAIM DEALER', '', '', '', '', '', '']);
-    detailData.push(['Tanggal Laporan: ' + new Date().toLocaleDateString('id-ID'), '', '', '', '', '', '']);
-    detailData.push(['', '', '', '', '', '', '']);
+    detailData.push(['LAPORAN TRACKING KLAIM DEALER', '', '', '', '', '', '', '']);
+    detailData.push(['Tanggal Laporan: ' + new Date().toLocaleDateString('id-ID'), '', '', '', '', '', '', '']);
+    detailData.push(['', '', '', '', '', '', '', '']);
     
-    detailData.push(['ID KLAIM', 'NAMA DEALER', 'PROGRAM', 'NO. INVOICE', 'NOMINAL (Rp)', 'TGL KIRIM', 'STATUS']);
+    detailData.push(['DEALER', 'PROGRAM', 'NOMINAL (Rp)', 'TGL KIRIM BERKAS', 'TGL DITERIMA MD', 'TGL DITERIMA PAJAK', 'TGL DITERIMA FINANCE', 'STATUS']);
     
     claims.forEach(c => {
       const st = STATUS[c.status].label;
+      const dates = c.dates || {};
       detailData.push([
-        c.id,
         c.dealer,
         c.program,
-        c.invoice,
         c.amount,
         fmtDateISO(c.submittedDate),
+        fmtDateISO(dates.received_md),
+        fmtDateISO(dates.received_tax),
+        fmtDateISO(dates.received_finance),
         st
       ]);
     });
@@ -1002,166 +1019,66 @@ function exportToExcel(){
     summaryData.push(['Verifikasi', stats.verification]);
     summaryData.push(['Revisi', stats.revise]);
     summaryData.push(['Disetujui', stats.approved]);
-    summaryData.push(['Proses Bayar', stats.processing]);
-    summaryData.push(['Dibayar', stats.paid]);
+    summaryData.push(['Diterima Tax', stats.received_tax]);
+    summaryData.push(['Diterima Finance', stats.received_finance]);
     summaryData.push(['', '']);
     
     const totalAmount = claims.reduce((sum, c) => sum + c.amount, 0);
-    const paidAmount = claims.filter(c => c.status === 'paid').reduce((sum, c) => sum + c.amount, 0);
-    summaryData.push(['Total Nominal', totalAmount]);
-    summaryData.push(['Nominal Dibayar', paidAmount]);
-    summaryData.push(['Nominal Belum Bayar', totalAmount - paidAmount]);
-
-    // Persiapan data untuk sheet 3: Per Program
-    const programData = [];
-    programData.push(['LAPORAN PER PROGRAM', '', '', '']);
-    programData.push(['', '', '', '']);
-    programData.push(['PROGRAM', 'JUMLAH KLAIM', 'TOTAL NOMINAL (Rp)', 'KLAIM DIBAYAR']);
-    
-    const byProgram = {};
-    PROGRAMS.forEach(p => byProgram[p] = { count: 0, amount: 0, paid: 0 });
-    claims.forEach(c => {
-      if(byProgram[c.program]){
-        byProgram[c.program].count++;
-        byProgram[c.program].amount += c.amount;
-        if(c.status === 'paid') byProgram[c.program].paid++;
-      }
-    });
-    
-    PROGRAMS.forEach(p => {
-      const d = byProgram[p];
-      if(d.count > 0){
-        programData.push([p, d.count, d.amount, d.paid]);
-      }
-    });
-
-    // Persiapan data untuk sheet 4: Per Dealer
-    const dealerData = [];
-    dealerData.push(['LAPORAN PER DEALER', '', '', '']);
-    dealerData.push(['', '', '', '']);
-    dealerData.push(['DEALER', 'JUMLAH KLAIM', 'TOTAL NOMINAL (Rp)', 'KLAIM DIBAYAR']);
-    
-    const byDealer = {};
-    claims.forEach(c => {
-      if(!byDealer[c.dealer]) byDealer[c.dealer] = { count: 0, amount: 0, paid: 0 };
-      byDealer[c.dealer].count++;
-      byDealer[c.dealer].amount += c.amount;
-      if(c.status === 'paid') byDealer[c.dealer].paid++;
-    });
-    
-    Object.entries(byDealer).sort((a,b) => b[1].amount - a[1].amount).forEach(([dealer, data]) => {
-      dealerData.push([dealer, data.count, data.amount, data.paid]);
-    });
+    const financeAmount = claims.filter(c => c.status === 'received_finance').reduce((sum, c) => sum + c.amount, 0);
+    summaryData.push(['TOTAL NOMINAL', totalAmount]);
+    summaryData.push(['NOMINAL DITERIMA FINANCE', financeAmount]);
 
     // Buat workbook
     const wb = XLSX.utils.book_new();
-    
-    // Tambah sheet
     const ws1 = XLSX.utils.aoa_to_sheet(detailData);
-    ws1['!cols'] = [
-      {wch: 15}, // ID KLAIM
-      {wch: 25}, // NAMA DEALER
-      {wch: 12}, // PROGRAM
-      {wch: 18}, // NO. INVOICE
-      {wch: 18}, // NOMINAL
-      {wch: 15}, // TGL KIRIM
-      {wch: 18}  // STATUS
-    ];
-    
     const ws2 = XLSX.utils.aoa_to_sheet(summaryData);
-    ws2['!cols'] = [{wch: 25}, {wch: 15}];
     
-    const ws3 = XLSX.utils.aoa_to_sheet(programData);
-    ws3['!cols'] = [{wch: 15}, {wch: 15}, {wch: 18}, {wch: 15}];
+    ws1.colWidths = [25, 15, 18, 18, 18, 18, 18, 20];
+    ws2.colWidths = [30, 15];
     
-    const ws4 = XLSX.utils.aoa_to_sheet(dealerData);
-    ws4['!cols'] = [{wch: 25}, {wch: 15}, {wch: 18}, {wch: 15}];
-
-    XLSX.utils.book_append_sheet(wb, ws1, 'Detail Klaim');
+    XLSX.utils.book_append_sheet(wb, ws1, 'Detail Tracking');
     XLSX.utils.book_append_sheet(wb, ws2, 'Ringkasan');
-    XLSX.utils.book_append_sheet(wb, ws3, 'Per Program');
-    XLSX.utils.book_append_sheet(wb, ws4, 'Per Dealer');
-
-    // Download
-    const filename = 'Laporan-Klaim-Dealer-' + new Date().toISOString().slice(0,10) + '.xlsx';
-    XLSX.writeFile(wb, filename);
+    
+    XLSX.writeFile(wb, 'Tracking_Klaim_Dealer_' + new Date().toLocaleDateString('id-ID').replace(/\//g, '-') + '.xlsx');
     showToast('File Excel berhasil diunduh.');
-  } catch (err) {
-    console.error('Export error:', err);
+  } catch(e){
     showToast('Gagal membuat file Excel.');
+    console.error(e);
   }
 }
 
 function printDetailReport(){
-  if(claims.length === 0){
-    showToast('Tidak ada data untuk dicetak.');
-    return;
-  }
-  
-  const printWin = window.open('', '', 'width=800,height=600');
-  const stats = computeStats();
-  
-  let html = `
-    <html><head><title>Laporan Klaim Dealer</title><style>
-      body{font-family:Arial,sans-serif;margin:20px;color:#23324A;}
-      h1{text-align:center;border-bottom:2px solid #23324A;padding-bottom:10px;}
-      table{width:100%;border-collapse:collapse;margin-top:20px;}
-      th,td{border:1px solid #ddd;padding:8px;text-align:left;}
-      th{background:#f5f5f5;font-weight:bold;}
-      .summary{margin:20px 0;padding:10px;background:#f9f9f9;border-radius:5px;}
-    </style></head><body>
-    <h1>Laporan Tracking Klaim Dealer</h1>
-    <p><strong>Tanggal Cetak:</strong> ${new Date().toLocaleDateString('id-ID')}</p>
-    
-    <div class="summary">
-      <strong>Ringkasan:</strong><br>
-      Total Klaim: ${stats.total} | Dibayar: ${stats.paid} | Pending: ${stats.total - stats.paid}
-    </div>
-    
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th><th>Dealer</th><th>Program</th><th>Invoice</th><th>Nominal</th><th>Tgl Kirim</th><th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-  `;
+  const w = window.open('', '', 'width=900,height=600');
+  let html = '<html><head><title>Laporan Detail Klaim</title><style>';
+  html += 'body{font-family:Arial,sans-serif;margin:20px;} table{width:100%;border-collapse:collapse;} ';
+  html += 'th,td{border:1px solid #333;padding:8px;text-align:left;} th{background:#ccc;font-weight:bold;} ';
+  html += 'h1{text-align:center;} .page-break{page-break-after:always;}</style></head><body>';
+  html += '<h1>Laporan Detail Tracking Klaim Dealer</h1>';
+  html += '<p><strong>Tanggal:</strong> ' + new Date().toLocaleDateString('id-ID') + '</p>';
+  html += '<table><thead><tr><th>Dealer</th><th>Program</th><th>Nominal</th><th>Status</th><th>Tgl Kirim</th></tr></thead><tbody>';
   
   claims.forEach(c => {
-    const st = STATUS[c.status].label;
-    html += `<tr>
-      <td>${c.id}</td><td>${escapeHtml(c.dealer)}</td><td>${c.program}</td><td>${c.invoice}</td>
-      <td>${fmtRupiah(c.amount)}</td><td>${fmtDate(c.submittedDate)}</td><td>${st}</td>
-    </tr>`;
+    const st = STATUS[c.status];
+    html += '<tr><td>' + escapeHtml(c.dealer) + '</td><td>' + c.program + '</td><td>' + fmtRupiah(c.amount) + '</td><td>' + st.label + '</td><td>' + fmtDate(c.submittedDate) + '</td></tr>';
   });
   
   html += '</tbody></table></body></html>';
-  
-  printWin.document.write(html);
-  printWin.document.close();
-  printWin.print();
+  w.document.write(html);
+  w.document.close();
 }
 
 function showReportModal(title, content){
   const modal = document.getElementById('modal-content');
   modal.innerHTML = `
     <button class="modal-close" id="close-modal">&times;</button>
-    <div style="max-height:calc(88vh - 60px);overflow-y:auto;">
-      ${content}
-      <div class="btn-row" style="margin-top:20px;">
-        <button class="btn btn-outline" id="close-report">Tutup</button>
-      </div>
-    </div>
+    ${content}
   `;
   document.getElementById('close-modal').addEventListener('click', closeModal);
-  document.getElementById('close-report').addEventListener('click', closeModal);
   document.getElementById('overlay').classList.add('active');
 }
 
-// ========== INIT ==========
 checkMonitoringAccess();
 loadClaims();
 </script>
-
 </body>
 </html>
